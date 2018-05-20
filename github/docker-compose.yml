@@ -1,0 +1,34 @@
+version: '3.6'
+services:
+  jupyter:
+    networks:
+      - labinabox
+    ports:
+      - '80:8000'
+      - '443:8000'
+    image: gsiupm/jupyterhub-oauth:0.8.1
+    command: jupyterhub -f /srv/jupyterhub/jupyterhub_config.py
+    hostname: jupyterhub
+    volumes:
+        - "/mnt/home:/mnt/home"
+        - "/var/run/docker.sock:/var/run/docker.sock"
+        - '/etc/ssl/ssl-custom/cert.pem:/srv/oauthenticator/ssl/ssl.cert'
+        - '/etc/ssl/ssl-custom/key.pem:/srv/oauthenticator/ssl/ssl.key'
+    environment:
+        OAUTH_CALLBACK_URL: "https://github.${DOMAIN-?todevnull.com}/hub/oauth_callback"
+        HOST_HOMEDIR: "/mnt/home/{username}"
+        OAUTH_CLASS: "oauthenticator.github.GitHubOAuthenticator"
+        GITHUB_CLIENT_ID: "${GITHUB_CLIENT_ID}"
+        GITHUB_CLIENT_SECRET: "${GITHUB_CLIENT_SECRET}"
+        JPY_COOKIE_SECRET: "${JPY_COOKIE_SECRET}"
+        JPY_API_TOKEN: "${CONFIGPROXY_AUTH_TOKEN}"
+        OAUTH_TLS_VERIFY: 0
+        COMMON_DIR: "/mnt/home/common"
+        DATASETS_DIR: "/mnt/home/datasets"
+        ADMINS: "${HUB_ADMINS-balkian,root}"
+        DOCKER_MEM_LIMIT: '250M'
+        DOCKER_NETWORK: labinabox
+
+networks:
+  labinabox:
+    name: labinabox

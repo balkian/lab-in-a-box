@@ -1,0 +1,118 @@
+version: '3.6'
+services:
+  web:
+    build: nginx
+    networks:
+      - labinabox
+    image: 'custom-nginx'
+    depends_on:
+      - jupyter
+      - gitlab
+    ports:
+      - '80:80'
+      - '443:443'
+    environment:
+      REGISTRY_INTERNAL: http://gitlab:4567
+      LAB_INTERNAL: http://gitlab:80
+      HUB_INTERNAL: http://jupyter:8000
+      DOMAIN: ${DOMAIN-?todevnull.com}
+    volumes:
+      - '/etc/ssl/ssl-custom/cert.pem:/ssl/certs/nginx.crt'
+      - '/etc/ssl/ssl-custom/key.pem:/ssl/private/nginx.key'
+      - '/data/html:/usr/share/nginx/html'
+  gitlab:
+    networks:
+      - labinabox
+    image: 'gitlab/gitlab-ce:10.7.3-ce.0'
+    restart: always
+    hostname: 'lab.${DOMAIN-?todevnull.com}'
+    environment:
+      GITLAB_OMNIBUS_CONFIG: |
+        external_url 'https://lab.${DOMAIN-?todevnull.com}'
+        mattermost_external_url 'https://chat.todevnull.com/'
+        registry_external_url 'https://registry.${DOMAIN-?todevnull.com}'
+
+        nginx['listen_port'] = 80
+        nginx['listen_https'] = false
+        # LFS
+        gitlab_rails['lfs_enabled'] = true
+        gitlab_rails['lfs_storage_path'] = "/mnt/lfs"
+        # Registry
+        gitlab_rails['registry_enabled'] = true
+        gitlab_rails['registry_port'] = "443"
+
+        registry_nginx['redirect_http_to_https'] = false
+        registry_nginx['listen_port'] = 4567
+        registry_nginx['nginx_enable'] = true
+        registry_nginx['listen_https'] = false
+        registry_nginx['https'] = false
+        gitlab_rails['registry_api_url'] = "http://127.0.0.1:5000"
+        registry['registry_http_addr'] = "127.0.0.1:5000" 
+        registry_nginx['proxy_set_headers'] = {
+          "Host" => "registry.${DOMAIN}",
+          "X-Forwarded-Proto" => "https",
+          "X-Forwarded-Ssl" => "on"
+        }
+
+        mattermost['service_use_ssl'] = false
+        mattermost_nginx['listen_port'] = 80
+        mattermost_nginx['listen_https'] = false
+        mattermost['gitlab_enable'] = true
+        mattermost['gitlab_id'] = "${MATTERMOST_ID}"
+        mattermost['gitlab_secret'] = "${MATTERMOST_SECRET}"
+        mattermost['gitlab_scope'] = ""
+        mattermost['gitlab_auth_endpoint'] = "https://lab.${DOMAIN-?todevnull.com}/oauth/authorize"
+        mattermost['gitlab_token_endpoint'] = "https://lab.${DOMAIN-?todevnull.com}/oauth/token"
+        mattermost['gitlab_user_api_endpoint'] = "https://lab.${DOMAIN-?todevnull.com}/api/v4/user"
+
+
+        # Chat
+        mattermost_nginx['redirect_http_to_https'] = false
+    ports:
+      - '8080:80'
+      - '8443:443'
+      - '22:22'
+      - '4567:4567'
+    volumes:
+      - 'gitlab-config:/etc/gitlab'
+      - 'gitlab-logs:/var/log/gitlab'
+      - 'gitlab-data:/var/opt/gitlab'
+      - 'gitlab-lfs:/mnt/lfs' 
+  jupyter:
+    networks:
+      - labinabox
+    image: gsiupm/jupyterhub-oauth:0.8.1
+    command: jupyterhub --no-ssl -f /srv/jupyterhub/jupyterhub_config.py
+    hostname: jupyterhub
+    volumes:
+        - "/mnt/home:/mnt/home"
+        - "/var/run/docker.sock:/var/run/docker.sock"
+    environment:
+        OAUTH_CALLBACK_URL: "https://hub.${DOMAIN-?todevnull.com}/hub/oauth_callback"
+        HOST_HOMEDIR: "/mnt/home/{username}"
+        OAUTH_CLASS: "oauthenticator.gitlab.GitLabOAuthenticator"
+        GITLAB_HOST: "https://lab.${DOMAIN-?todevnull.com}/"
+        GITLAB_CLIENT_ID: "${GITLAB_CLIENT_ID}"
+        GITLAB_CLIENT_SECRET: "${GITLAB_CLIENT_SECRET}"
+        JPY_COOKIE_SECRET: "${JPY_COOKIE_SECRET}"
+        JPY_API_TOKEN: "${CONFIGPROXY_AUTH_TOKEN}"
+        OAUTH_TLS_VERIFY: 0
+        COMMON_DIR: "/mnt/home/common"
+        DATASETS_DIR: "/mnt/home/datasets"
+        ADMINS: "${HUB_ADMINS-balkian,root}"
+        DOCKER_NETWORK: labinabox
+        DOCKER_MEM_LIMIT: '150M'
+
+volumes:
+  gitlab-config:
+    name: gitlab-config
+  gitlab-logs:
+    name: gitlab-logs
+  gitlab-data:
+    name: gitlab-data
+  gitlab-lfs:
+    name: gitlab-lfs
+
+networks:
+  labinabox:
+    name: labinabox
