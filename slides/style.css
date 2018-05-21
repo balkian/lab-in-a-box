@@ -1,0 +1,11 @@
+.white h1 {
+    color: black;
+    -webkit-text-stroke: 3px white;
+    text-stroke: 3px white
+}
+img.noborder {
+    border: none !important;
+    -webkit-box-shadow: none !important;
+	  -moz-box-shadow: none !important;
+	  box-shadow: none !important;
+}
